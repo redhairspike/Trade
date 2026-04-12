@@ -9,6 +9,7 @@ import indicators.moving_averages  # noqa: F401
 import indicators.oscillators      # noqa: F401
 import indicators.volatility           # noqa: F401
 import indicators.support_resistance  # noqa: F401
+import indicators.patterns            # noqa: F401
 
 app = dash.Dash(
     __name__,

@@ -61,6 +61,8 @@ def build_candlestick_chart(
         "Pivot_S3": {"color": "#00796b", "dash": "dash", "width": 0.8},
         "SR_resistance": {"color": "#ef5350", "dash": "dashdot", "width": 1},
         "SR_support":    {"color": "#26a69a", "dash": "dashdot", "width": 1},
+        "DT_neckline":   {"color": "#FF6F61", "dash": "dot", "width": 1.2},
+        "DB_neckline":   {"color": "#64FFDA", "dash": "dot", "width": 1.2},
     }
 
     general_idx = 0
@@ -125,6 +127,41 @@ def build_candlestick_chart(
                     mode="markers",
                     marker=dict(symbol="x", size=8, color="#FFA500"),
                     name="平倉",
+                ),
+                row=1, col=1,
+            )
+
+    # Pattern signal markers (Double Top / Double Bottom)
+    if "DT_signal" in df.columns:
+        dt_bars = df[df["DT_signal"] == 1]
+        if not dt_bars.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=dt_bars.index,
+                    y=dt_bars["High"] * 1.01,
+                    mode="markers+text",
+                    marker=dict(symbol="triangle-down", size=12, color="#FF6F61"),
+                    text="M",
+                    textposition="top center",
+                    textfont=dict(color="#FF6F61", size=10),
+                    name="M頭",
+                ),
+                row=1, col=1,
+            )
+
+    if "DB_signal" in df.columns:
+        db_bars = df[df["DB_signal"] == 1]
+        if not db_bars.empty:
+            fig.add_trace(
+                go.Scatter(
+                    x=db_bars.index,
+                    y=db_bars["Low"] * 0.99,
+                    mode="markers+text",
+                    marker=dict(symbol="triangle-up", size=12, color="#64FFDA"),
+                    text="W",
+                    textposition="bottom center",
+                    textfont=dict(color="#64FFDA", size=10),
+                    name="W底",
                 ),
                 row=1, col=1,
             )

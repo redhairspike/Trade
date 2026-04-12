@@ -55,6 +55,8 @@ def get_indicator_fields(name: str, df: pd.DataFrame = None, **kwargs) -> list[s
             "ATR": ["ATR"],
             "Pivot": ["Pivot_P", "Pivot_R1", "Pivot_S1", "Pivot_R2", "Pivot_S2", "Pivot_R3", "Pivot_S3"],
             "SRLevel": ["SR_resistance", "SR_support"],
+            "DoubleTop": ["DT_signal", "DT_neckline", "DT_target"],
+            "DoubleBottom": ["DB_signal", "DB_neckline", "DB_target"],
         }
         return field_map.get(name, [name])
 

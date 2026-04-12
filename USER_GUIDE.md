@@ -159,6 +159,8 @@ Symbol, Name, PE, PB, DividendYield, ROE, RevenueGrowth, EPS
 | ATR (平均真實範圍) | period=14 | ATR |
 | Pivot (樞軸點) | pivot_type=1 | Pivot_P, Pivot_R1, Pivot_S1, Pivot_R2, Pivot_S2, Pivot_R3, Pivot_S3 |
 | SRLevel (支撐壓力) | order=5, merge_pct=1 | SR_resistance, SR_support |
+| DoubleTop (M頭) | order=10, tolerance_pct=3, min_bars=10 | DT_signal, DT_neckline, DT_target |
+| DoubleBottom (W底) | order=10, tolerance_pct=3, min_bars=10 | DB_signal, DB_neckline, DB_target |
 
 #### Pivot 樞軸點 — 參數說明
 
@@ -185,6 +187,30 @@ Symbol, Name, PE, PB, DividendYield, ROE, RevenueGrowth, EPS
 - **SR_resistance**: 當前收盤價上方最近的壓力位
 - **SR_support**: 當前收盤價下方最近的支撐位
 - 不偷看未來資料，僅使用已出現過的歷史極值
+
+#### DoubleTop M頭 / DoubleBottom W底 — 參數說明
+
+透過 Zigzag 局部極值偵測 M 頭和 W 底形態，在突破/跌破頸線時發出信號。
+
+| 參數 | 預設 | 說明 |
+|------|------|------|
+| order | 10 | 局部極值判斷嚴格度 (前後各幾根 K 棒)，越小越敏感 |
+| tolerance_pct | 3 | 兩峰/兩谷價差容許百分比 (以形態高度為基準) |
+| min_bars | 10 | 兩峰/兩谷最少間隔 K 棒數 |
+
+**DoubleTop (M頭) 輸出：**
+- `DT_signal`: 1 = M頭確認 (收盤價跌破頸線)，0 = 無信號
+- `DT_neckline`: 頸線價位 (兩峰間的低谷)
+- `DT_target`: 目標價 (頸線 - 形態高度)
+
+**DoubleBottom (W底) 輸出：**
+- `DB_signal`: 1 = W底確認 (收盤價突破頸線)，0 = 無信號
+- `DB_neckline`: 頸線價位 (兩谷間的高峰)
+- `DB_target`: 目標價 (頸線 + 形態高度)
+
+**圖表顯示：** M頭確認處顯示紅色倒三角 + "M" 標記；W底確認處顯示綠色三角 + "W" 標記。頸線以虛線疊加在 K 線圖上。
+
+> **參數調整建議：** 日線用 `order=5~10`；週線或較長週期可用 `order=3~5`。`tolerance_pct` 設大一點 (5~10%) 可偵測到更多形態。
 
 ### 風控設定
 
@@ -273,6 +299,25 @@ Symbol, Name, PE, PB, DividendYield, ROE, RevenueGrowth, EPS
 ### 9. 支撐壓力突破 (做多)
 - **進場**: SRLevel / SR_resistance / order=10 / crosses_above / SR_resistance
 - **說明**: 收盤價突破局部極值壓力位時進場，order=10 可找出較大級別的壓力
+
+### 10. W底做多 (做多)
+- **進場**: DoubleBottom / DB_signal / order=5,tolerance_pct=5 / >= / 1
+- **出場**: DoubleTop / DT_signal / order=5,tolerance_pct=5 / >= / 1
+- **停損**: 5%
+- **說明**: W底確認 (突破頸線) 時做多，遇到 M頭確認時出場
+
+### 11. M頭放空 (做空)
+- **方向**: 做空
+- **進場**: DoubleTop / DT_signal / order=5,tolerance_pct=5 / >= / 1
+- **出場**: DoubleBottom / DB_signal / order=5,tolerance_pct=5 / >= / 1
+- **停損**: 5%
+- **說明**: M頭確認 (跌破頸線) 時放空，遇到 W底確認時回補
+
+### 12. W底 + 均線濾網 (做多)
+- **均線方向濾網**: 啟用，MA 20 (20MA 上彎才做多)
+- **進場**: DoubleBottom / DB_signal / order=5,tolerance_pct=5 / >= / 1
+- **停損**: 5%、**停利**: 15%
+- **說明**: 只在均線上彎的趨勢中做 W底進場，避免在下跌趨勢中抄底
 
 ---
 

@@ -341,6 +341,10 @@ def register_callbacks(app):
                 overlays.append(col)
             elif col.startswith("Pivot_") or col.startswith("SR_"):
                 overlays.append(col)
+            elif col in ["DT_neckline", "DB_neckline"]:
+                overlays.append(col)
+            elif col in ["DT_signal", "DB_signal", "DT_target", "DB_target"]:
+                continue  # handled as markers in chart.py
             elif col == "_filter_ma_pos":
                 prepared_df = prepared_df.rename(columns={col: "FilterMA(位置)"})
                 overlays.append("FilterMA(位置)")

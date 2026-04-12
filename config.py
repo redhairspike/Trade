@@ -14,6 +14,8 @@ INDICATOR_DEFAULTS = {
     "ATR": {"period": 14},
     "Pivot": {"pivot_type": 1},
     "SRLevel": {"order": 5, "merge_pct": 1},
+    "DoubleTop": {"order": 10, "tolerance_pct": 3, "min_bars": 10},
+    "DoubleBottom": {"order": 10, "tolerance_pct": 3, "min_bars": 10},
 }
 
 OPERATORS = [">", "<", ">=", "<=", "crosses_above", "crosses_below"]
