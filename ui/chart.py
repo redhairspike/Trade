@@ -9,19 +9,20 @@ def build_candlestick_chart(
     trades: list[Trade] | None = None,
     overlays: list[str] | None = None,
     sub_indicators: list[str] | None = None,
+    equity_curve: pd.DataFrame | None = None,
 ) -> go.Figure:
     """Build the main candlestick chart with overlays and sub-charts."""
     # Determine number of rows
     sub_indicators = sub_indicators or []
     n_subs = len(sub_indicators)
-    total_rows = 1 + n_subs + 1  # candlestick + sub-indicators + volume
+    total_rows = 1 + n_subs + 1  # candlestick + sub-indicators + equity
 
-    row_heights = [0.5] + [0.15] * n_subs + [0.1]
+    row_heights = [0.5] + [0.15] * n_subs + [0.15]
     # Normalize
     total = sum(row_heights)
     row_heights = [h / total for h in row_heights]
 
-    subplot_titles = [""] + sub_indicators + ["Volume"]
+    subplot_titles = [""] + sub_indicators + ["Equity"]
 
     fig = make_subplots(
         rows=total_rows,
@@ -103,7 +104,7 @@ def build_candlestick_chart(
                     x=[e[0] for e in entries_long],
                     y=[e[1] for e in entries_long],
                     mode="markers",
-                    marker=dict(symbol="triangle-up", size=10, color="#26a69a"),
+                    marker=dict(symbol="triangle-up", size=10, color="#2196F3"),
                     name="買入",
                 ),
                 row=1, col=1,
@@ -219,12 +220,17 @@ def build_candlestick_chart(
                 row=row, col=1,
             )
 
-    # Volume
-    if "Volume" in df.columns:
-        vol_colors = ["#26a69a" if df["Close"].iloc[i] >= df["Open"].iloc[i] else "#ef5350"
-                       for i in range(len(df))]
+    # Equity curve (last row)
+    if equity_curve is not None and not equity_curve.empty and "equity" in equity_curve.columns:
         fig.add_trace(
-            go.Bar(x=df.index, y=df["Volume"], name="成交量", marker_color=vol_colors),
+            go.Scatter(
+                x=equity_curve.index,
+                y=equity_curve["equity"],
+                name="權益曲線",
+                line=dict(color="#4CAF50", width=1.5),
+                fill="tozeroy",
+                fillcolor="rgba(76, 175, 80, 0.1)",
+            ),
             row=total_rows, col=1,
         )
 
@@ -240,39 +246,28 @@ def build_candlestick_chart(
     return fig
 
 
-def build_equity_chart(equity_curve: pd.DataFrame) -> go.Figure:
-    """Build equity curve chart."""
+def build_volume_chart(df: pd.DataFrame) -> go.Figure:
+    """Build volume bar chart."""
     fig = go.Figure()
 
-    if not equity_curve.empty and "equity" in equity_curve.columns:
-        fig.add_trace(go.Scatter(
-            x=equity_curve.index,
-            y=equity_curve["equity"],
-            name="權益曲線",
-            line=dict(color="#4CAF50", width=2),
-            fill="tozeroy",
-            fillcolor="rgba(76, 175, 80, 0.1)",
-        ))
-
-        # Drawdown
-        cummax = equity_curve["equity"].cummax()
-        drawdown = (equity_curve["equity"] - cummax) / cummax * 100
-        fig.add_trace(go.Scatter(
-            x=equity_curve.index,
-            y=drawdown,
-            name="回撤 %",
-            line=dict(color="#ef5350", width=1),
-            yaxis="y2",
+    if not df.empty and "Volume" in df.columns:
+        vol_colors = [
+            "#26a69a" if df["Close"].iloc[i] >= df["Open"].iloc[i] else "#ef5350"
+            for i in range(len(df))
+        ]
+        fig.add_trace(go.Bar(
+            x=df.index,
+            y=df["Volume"],
+            name="成交量",
+            marker_color=vol_colors,
         ))
 
     fig.update_layout(
         template="plotly_dark",
-        height=300,
-        showlegend=True,
-        legend=dict(orientation="h", y=1.1),
-        yaxis=dict(title="權益"),
-        yaxis2=dict(title="回撤 %", overlaying="y", side="right"),
-        margin=dict(l=50, r=50, t=20, b=30),
+        height=200,
+        showlegend=False,
+        yaxis=dict(title="成交量"),
+        margin=dict(l=50, r=20, t=20, b=30),
     )
 
     return fig

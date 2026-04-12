@@ -12,7 +12,7 @@ from indicators.base import get_indicator_fields, INDICATOR_REGISTRY
 from ui.layout import (
     build_chart_panel, build_trades_panel, build_metrics_panel,
 )
-from ui.chart import build_candlestick_chart, build_equity_chart
+from ui.chart import build_candlestick_chart, build_volume_chart
 from ui.components import build_rule_row
 from config import INDICATOR_DEFAULTS
 
@@ -371,10 +371,10 @@ def register_callbacks(app):
         # Deduplicate
         sub_indicators = list(dict.fromkeys(sub_indicators))
 
-        main_fig = build_candlestick_chart(prepared_df, trades, overlays, sub_indicators)
-        equity_fig = build_equity_chart(equity_df)
+        main_fig = build_candlestick_chart(prepared_df, trades, overlays, sub_indicators, equity_df)
+        volume_fig = build_volume_chart(prepared_df)
 
-        return main_fig, equity_fig
+        return main_fig, volume_fig
 
     # Update trades table
     @app.callback(

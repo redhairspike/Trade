@@ -87,8 +87,8 @@ def build_chart_panel() -> html.Div:
         dcc.Loading(
             id="chart-loading",
             children=[
-                dcc.Graph(id="main-chart", style={"height": "500px"}),
-                dcc.Graph(id="equity-chart", style={"height": "300px"}),
+                dcc.Graph(id="main-chart", style={"height": "600px"}),
+                dcc.Graph(id="equity-chart", style={"height": "200px"}),
             ],
             type="circle",
         ),
