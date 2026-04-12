@@ -509,12 +509,13 @@ def _update_rule_fields(indicators, prefix):
                 ps2.append(_SLOT_HIDE)
         else:
             field_results.append([])
-            for lst in [pk0, pv0, ps0, pk1, pv1, ps1, pk2, pv2, ps2]:
-                lst.append(no_update if triggered_idx is not None else (
-                    "" if lst in [pk0, pk1, pk2] else
-                    None if lst in [pv0, pv1, pv2] else
-                    _SLOT_HIDE
-                ))
+            if triggered_idx is not None:
+                for lst in [pk0, pv0, ps0, pk1, pv1, ps1, pk2, pv2, ps2]:
+                    lst.append(no_update)
+            else:
+                pk0.append(""); pv0.append(None); ps0.append(_SLOT_HIDE)
+                pk1.append(""); pv1.append(None); ps1.append(_SLOT_HIDE)
+                pk2.append(""); pv2.append(None); ps2.append(_SLOT_HIDE)
 
     return (field_results, pk0, pv0, ps0, pk1, pv1, ps1, pk2, pv2, ps2)
 
