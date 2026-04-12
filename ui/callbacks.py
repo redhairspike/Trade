@@ -131,34 +131,42 @@ def register_callbacks(app):
             children.append(build_rule_row("exit", new_index))
         return children
 
-    # Update field dropdown when indicator is selected
+    # Update field dropdown and auto-fill params when indicator is selected
     @app.callback(
         Output({"type": "entry-field", "index": ALL}, "options"),
+        Output({"type": "entry-param", "index": ALL}, "value"),
         Input({"type": "entry-indicator", "index": ALL}, "value"),
     )
     def update_entry_fields(indicators):
-        results = []
+        field_results = []
+        param_results = []
         for ind in indicators:
             if ind and ind in INDICATOR_REGISTRY:
                 fields = get_indicator_fields(ind)
-                results.append([{"label": f, "value": f} for f in fields])
+                field_results.append([{"label": f, "value": f} for f in fields])
+                param_results.append(_format_default_params(ind))
             else:
-                results.append([])
-        return results
+                field_results.append([])
+                param_results.append("")
+        return field_results, param_results
 
     @app.callback(
         Output({"type": "exit-field", "index": ALL}, "options"),
+        Output({"type": "exit-param", "index": ALL}, "value"),
         Input({"type": "exit-indicator", "index": ALL}, "value"),
     )
     def update_exit_fields(indicators):
-        results = []
+        field_results = []
+        param_results = []
         for ind in indicators:
             if ind and ind in INDICATOR_REGISTRY:
                 fields = get_indicator_fields(ind)
-                results.append([{"label": f, "value": f} for f in fields])
+                field_results.append([{"label": f, "value": f} for f in fields])
+                param_results.append(_format_default_params(ind))
             else:
-                results.append([])
-        return results
+                field_results.append([])
+                param_results.append("")
+        return field_results, param_results
 
     # Run backtest
     @app.callback(
@@ -424,6 +432,17 @@ def register_callbacks(app):
             str(m["long_count"]),
             str(m["short_count"]),
         )
+
+
+def _format_default_params(indicator: str) -> str:
+    """Format default params for display, e.g. 'period=14' or 'fast=12,slow=26,signal=9'."""
+    params = INDICATOR_DEFAULTS.get(indicator, {})
+    if not params:
+        return ""
+    if len(params) == 1:
+        k, v = next(iter(params.items()))
+        return f"{k}={v}"
+    return ",".join(f"{k}={v}" for k, v in params.items())
 
 
 def _build_rules(indicators, fields, params, operators, values) -> list[Rule]:
