@@ -20,51 +20,95 @@ def build_metric_card(label: str, value: str, card_id: str = "") -> html.Div:
     )
 
 
+def _param_slot(prefix: str, index: int, slot: int) -> html.Div:
+    """Build a single param slot (label + number input), initially hidden."""
+    _input_style = {
+        "width": "58px",
+        "backgroundColor": "#1a1a2e",
+        "color": "#ddd",
+        "border": "1px solid #444",
+        "borderRadius": "4px",
+        "padding": "3px 6px",
+        "fontSize": "12px",
+    }
+    return html.Div(
+        [
+            html.Label(
+                "",
+                id={"type": f"{prefix}-pk{slot}", "index": index},
+                style={"color": "#999", "fontSize": "11px", "marginRight": "2px", "whiteSpace": "nowrap"},
+            ),
+            dcc.Input(
+                id={"type": f"{prefix}-pv{slot}", "index": index},
+                type="number",
+                step="any",
+                style=_input_style,
+            ),
+        ],
+        id={"type": f"{prefix}-ps{slot}", "index": index},
+        style={"display": "none", "alignItems": "center", "gap": "2px"},
+    )
+
+
 def build_rule_row(prefix: str, index: int) -> html.Div:
-    """Build a single rule row (indicator + params + operator + value)."""
+    """Build a single rule row (indicator + field + operator + value) with param detail row."""
     indicator_options = [{"label": k, "value": k} for k in INDICATOR_DEFAULTS.keys()]
     operator_options = [{"label": op, "value": op} for op in OPERATORS]
 
     return html.Div(
         [
-            dcc.Dropdown(
-                id={"type": f"{prefix}-indicator", "index": index},
-                options=indicator_options,
-                placeholder="指標",
-                style={"width": "100px", "minWidth": "100px"},
+            # Row 1: indicator, field, operator, value
+            html.Div(
+                [
+                    dcc.Dropdown(
+                        id={"type": f"{prefix}-indicator", "index": index},
+                        options=indicator_options,
+                        placeholder="指標",
+                        style={"width": "105px", "minWidth": "105px"},
+                    ),
+                    dcc.Dropdown(
+                        id={"type": f"{prefix}-field", "index": index},
+                        options=[],
+                        placeholder="欄位",
+                        style={"width": "110px", "minWidth": "110px"},
+                    ),
+                    dcc.Dropdown(
+                        id={"type": f"{prefix}-operator", "index": index},
+                        options=operator_options,
+                        placeholder="條件",
+                        style={"width": "120px", "minWidth": "120px"},
+                    ),
+                    dcc.Input(
+                        id={"type": f"{prefix}-value", "index": index},
+                        type="text",
+                        placeholder="值",
+                        style={"width": "70px"},
+                    ),
+                ],
+                style={
+                    "display": "flex",
+                    "gap": "6px",
+                    "alignItems": "center",
+                    "flexWrap": "wrap",
+                },
             ),
-            dcc.Dropdown(
-                id={"type": f"{prefix}-field", "index": index},
-                options=[],
-                placeholder="欄位",
-                style={"width": "110px", "minWidth": "110px"},
-            ),
-            dcc.Input(
-                id={"type": f"{prefix}-param", "index": index},
-                type="text",
-                placeholder="參數",
-                style={"width": "60px"},
-            ),
-            dcc.Dropdown(
-                id={"type": f"{prefix}-operator", "index": index},
-                options=operator_options,
-                placeholder="條件",
-                style={"width": "120px", "minWidth": "120px"},
-            ),
-            dcc.Input(
-                id={"type": f"{prefix}-value", "index": index},
-                type="text",
-                placeholder="值",
-                style={"width": "70px"},
+            # Row 2: param detail slots (up to 3, shown/hidden by callback)
+            html.Div(
+                [
+                    _param_slot(prefix, index, 0),
+                    _param_slot(prefix, index, 1),
+                    _param_slot(prefix, index, 2),
+                ],
+                style={
+                    "display": "flex",
+                    "gap": "10px",
+                    "marginTop": "3px",
+                    "marginLeft": "4px",
+                    "minHeight": "0px",
+                },
             ),
         ],
-        style={
-            "display": "flex",
-            "gap": "6px",
-            "alignItems": "center",
-            "marginBottom": "6px",
-            "flexWrap": "wrap",
-        },
+        style={"marginBottom": "8px"},
     )
 
 

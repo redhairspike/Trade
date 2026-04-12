@@ -131,42 +131,41 @@ def register_callbacks(app):
             children.append(build_rule_row("exit", new_index))
         return children
 
-    # Update field dropdown and auto-fill params when indicator is selected
+    # Update field dropdown and param slots when indicator is selected
     @app.callback(
         Output({"type": "entry-field", "index": ALL}, "options"),
-        Output({"type": "entry-param", "index": ALL}, "value"),
+        # Slot 0
+        Output({"type": "entry-pk0", "index": ALL}, "children"),
+        Output({"type": "entry-pv0", "index": ALL}, "value"),
+        Output({"type": "entry-ps0", "index": ALL}, "style"),
+        # Slot 1
+        Output({"type": "entry-pk1", "index": ALL}, "children"),
+        Output({"type": "entry-pv1", "index": ALL}, "value"),
+        Output({"type": "entry-ps1", "index": ALL}, "style"),
+        # Slot 2
+        Output({"type": "entry-pk2", "index": ALL}, "children"),
+        Output({"type": "entry-pv2", "index": ALL}, "value"),
+        Output({"type": "entry-ps2", "index": ALL}, "style"),
         Input({"type": "entry-indicator", "index": ALL}, "value"),
     )
     def update_entry_fields(indicators):
-        field_results = []
-        param_results = []
-        for ind in indicators:
-            if ind and ind in INDICATOR_REGISTRY:
-                fields = get_indicator_fields(ind)
-                field_results.append([{"label": f, "value": f} for f in fields])
-                param_results.append(_format_default_params(ind))
-            else:
-                field_results.append([])
-                param_results.append("")
-        return field_results, param_results
+        return _update_rule_fields(indicators, "entry")
 
     @app.callback(
         Output({"type": "exit-field", "index": ALL}, "options"),
-        Output({"type": "exit-param", "index": ALL}, "value"),
+        Output({"type": "exit-pk0", "index": ALL}, "children"),
+        Output({"type": "exit-pv0", "index": ALL}, "value"),
+        Output({"type": "exit-ps0", "index": ALL}, "style"),
+        Output({"type": "exit-pk1", "index": ALL}, "children"),
+        Output({"type": "exit-pv1", "index": ALL}, "value"),
+        Output({"type": "exit-ps1", "index": ALL}, "style"),
+        Output({"type": "exit-pk2", "index": ALL}, "children"),
+        Output({"type": "exit-pv2", "index": ALL}, "value"),
+        Output({"type": "exit-ps2", "index": ALL}, "style"),
         Input({"type": "exit-indicator", "index": ALL}, "value"),
     )
     def update_exit_fields(indicators):
-        field_results = []
-        param_results = []
-        for ind in indicators:
-            if ind and ind in INDICATOR_REGISTRY:
-                fields = get_indicator_fields(ind)
-                field_results.append([{"label": f, "value": f} for f in fields])
-                param_results.append(_format_default_params(ind))
-            else:
-                field_results.append([])
-                param_results.append("")
-        return field_results, param_results
+        return _update_rule_fields(indicators, "exit")
 
     # Run backtest
     @app.callback(
@@ -183,12 +182,16 @@ def register_callbacks(app):
         State("direction-select", "value"),
         State({"type": "entry-indicator", "index": ALL}, "value"),
         State({"type": "entry-field", "index": ALL}, "value"),
-        State({"type": "entry-param", "index": ALL}, "value"),
+        State({"type": "entry-pv0", "index": ALL}, "value"),
+        State({"type": "entry-pv1", "index": ALL}, "value"),
+        State({"type": "entry-pv2", "index": ALL}, "value"),
         State({"type": "entry-operator", "index": ALL}, "value"),
         State({"type": "entry-value", "index": ALL}, "value"),
         State({"type": "exit-indicator", "index": ALL}, "value"),
         State({"type": "exit-field", "index": ALL}, "value"),
-        State({"type": "exit-param", "index": ALL}, "value"),
+        State({"type": "exit-pv0", "index": ALL}, "value"),
+        State({"type": "exit-pv1", "index": ALL}, "value"),
+        State({"type": "exit-pv2", "index": ALL}, "value"),
         State({"type": "exit-operator", "index": ALL}, "value"),
         State({"type": "exit-value", "index": ALL}, "value"),
         State("stop-loss-input", "value"),
@@ -211,8 +214,8 @@ def register_callbacks(app):
         n_clicks, market, symbol, start_date, end_date, interval,
         csv_contents, csv_filename,
         direction,
-        entry_indicators, entry_fields, entry_params, entry_operators, entry_values,
-        exit_indicators, exit_fields, exit_params, exit_operators, exit_values,
+        entry_indicators, entry_fields, entry_pv0, entry_pv1, entry_pv2, entry_operators, entry_values,
+        exit_indicators, exit_fields, exit_pv0, exit_pv1, exit_pv2, exit_operators, exit_values,
         stop_loss, take_profit, position_size, capital, commission, slippage,
         downloaded_file,
         ma_pos_enable, ma_pos_type, ma_pos_period,
@@ -239,13 +242,15 @@ def register_callbacks(app):
 
             # Build entry rules
             entry_rules = _build_rules(
-                entry_indicators, entry_fields, entry_params,
+                entry_indicators, entry_fields,
+                entry_pv0, entry_pv1, entry_pv2,
                 entry_operators, entry_values,
             )
 
             # Build exit rules
             exit_rules = _build_rules(
-                exit_indicators, exit_fields, exit_params,
+                exit_indicators, exit_fields,
+                exit_pv0, exit_pv1, exit_pv2,
                 exit_operators, exit_values,
             )
 
@@ -439,43 +444,107 @@ def register_callbacks(app):
         )
 
 
-def _format_default_params(indicator: str) -> str:
-    """Format default params for display, e.g. 'period=14' or 'fast=12,slow=26,signal=9'."""
-    params = INDICATOR_DEFAULTS.get(indicator, {})
-    if not params:
-        return ""
-    if len(params) == 1:
-        k, v = next(iter(params.items()))
-        return f"{k}={v}"
-    return ",".join(f"{k}={v}" for k, v in params.items())
+_SLOT_SHOW = {"display": "flex", "alignItems": "center", "gap": "2px"}
+_SLOT_HIDE = {"display": "none", "alignItems": "center", "gap": "2px"}
 
 
-def _build_rules(indicators, fields, params, operators, values) -> list[Rule]:
+def _update_rule_fields(indicators, prefix):
+    """Shared logic for update_entry_fields / update_exit_fields.
+
+    Returns a tuple of 10 parallel lists:
+      field_options, pk0, pv0, ps0, pk1, pv1, ps1, pk2, pv2, ps2
+    """
+    triggered = ctx.triggered_id
+    triggered_idx = triggered.get("index") if isinstance(triggered, dict) else None
+
+    field_results = []
+    pk0, pv0, ps0 = [], [], []
+    pk1, pv1, ps1 = [], [], []
+    pk2, pv2, ps2 = [], [], []
+
+    for i, ind in enumerate(indicators):
+        # Only update the rule that actually changed; keep others unchanged
+        if triggered_idx is not None and triggered_idx != i:
+            field_results.append(no_update)
+            for lst in [pk0, pv0, ps0, pk1, pv1, ps1, pk2, pv2, ps2]:
+                lst.append(no_update)
+            continue
+
+        if ind and ind in INDICATOR_REGISTRY:
+            fields = get_indicator_fields(ind)
+            field_results.append([{"label": f, "value": f} for f in fields])
+
+            params = INDICATOR_DEFAULTS.get(ind, {})
+            keys = list(params.keys())
+            vals = list(params.values())
+
+            # Slot 0
+            if len(keys) > 0:
+                pk0.append(f"{keys[0]}:")
+                pv0.append(vals[0])
+                ps0.append(_SLOT_SHOW)
+            else:
+                pk0.append("")
+                pv0.append(None)
+                ps0.append(_SLOT_HIDE)
+
+            # Slot 1
+            if len(keys) > 1:
+                pk1.append(f"{keys[1]}:")
+                pv1.append(vals[1])
+                ps1.append(_SLOT_SHOW)
+            else:
+                pk1.append("")
+                pv1.append(None)
+                ps1.append(_SLOT_HIDE)
+
+            # Slot 2
+            if len(keys) > 2:
+                pk2.append(f"{keys[2]}:")
+                pv2.append(vals[2])
+                ps2.append(_SLOT_SHOW)
+            else:
+                pk2.append("")
+                pv2.append(None)
+                ps2.append(_SLOT_HIDE)
+        else:
+            field_results.append([])
+            for lst in [pk0, pv0, ps0, pk1, pv1, ps1, pk2, pv2, ps2]:
+                lst.append(no_update if triggered_idx is not None else (
+                    "" if lst in [pk0, pk1, pk2] else
+                    None if lst in [pv0, pv1, pv2] else
+                    _SLOT_HIDE
+                ))
+
+    return (field_results, pk0, pv0, ps0, pk1, pv1, ps1, pk2, pv2, ps2)
+
+
+def _build_rules(indicators, fields, pv0s, pv1s, pv2s, operators, values) -> list[Rule]:
     """Build Rule list from parallel arrays of UI values."""
     rules = []
-    for ind, field, param, op, val in zip(
-        indicators or [], fields or [], params or [],
+    for ind, field, v0, v1, v2, op, val in zip(
+        indicators or [], fields or [],
+        pv0s or [], pv1s or [], pv2s or [],
         operators or [], values or [],
     ):
         if not ind or not field or not op or val is None or val == "":
             continue
 
-        # Parse params
+        # Build params from individual slot values
         indicator_params = INDICATOR_DEFAULTS.get(ind, {}).copy()
-        if param:
-            try:
-                # Accept format like "period=20" or just "20" for single-param indicators
-                if "=" in str(param):
-                    for kv in str(param).split(","):
-                        k, v = kv.strip().split("=")
-                        indicator_params[k.strip()] = int(v.strip())
-                else:
-                    # Single value: apply to first param
-                    first_key = list(indicator_params.keys())[0] if indicator_params else None
-                    if first_key:
-                        indicator_params[first_key] = int(param)
-            except (ValueError, IndexError):
-                pass
+        keys = list(indicator_params.keys())
+        slot_vals = [v0, v1, v2]
+        for j, k in enumerate(keys):
+            if j < len(slot_vals) and slot_vals[j] is not None:
+                try:
+                    # Preserve int/float type
+                    orig = indicator_params[k]
+                    if isinstance(orig, float):
+                        indicator_params[k] = float(slot_vals[j])
+                    else:
+                        indicator_params[k] = int(slot_vals[j])
+                except (ValueError, TypeError):
+                    pass
 
         # Parse value - could be number or column name
         try:
