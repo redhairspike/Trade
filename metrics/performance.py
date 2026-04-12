@@ -57,7 +57,7 @@ def compute_metrics(
         avg_trade_return = np.mean([t.return_pct for t in trades])
         gross_profit = sum(wins) if wins else 0
         gross_loss = abs(sum(losses)) if losses else 0
-        profit_factor = gross_profit / gross_loss if gross_loss > 0 else float("inf")
+        profit_factor = gross_profit / gross_loss if gross_loss > 0 else 9999.99
         long_count = sum(1 for t in trades if t.side == "long")
         short_count = sum(1 for t in trades if t.side == "short")
     else:

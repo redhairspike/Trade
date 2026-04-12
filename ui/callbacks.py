@@ -420,17 +420,22 @@ def register_callbacks(app):
             return ("--",) * 10
 
         m = store_data["metrics"]
+
+        def _safe(val, default=0):
+            """Return default if val is None (from JSON inf/NaN)."""
+            return default if val is None else val
+
         return (
-            f'{m["total_return"] * 100:.2f}%',
-            f'{m["annualized_return"] * 100:.2f}%',
-            f'{m["sharpe_ratio"]:.2f}',
-            f'{m["max_drawdown"] * 100:.2f}%',
-            f'{m["win_rate"] * 100:.1f}%',
-            f'{m["profit_factor"]:.2f}',
-            str(m["trade_count"]),
-            f'{m["avg_trade_return"] * 100:.2f}%',
-            str(m["long_count"]),
-            str(m["short_count"]),
+            f'{_safe(m["total_return"]) * 100:.2f}%',
+            f'{_safe(m["annualized_return"]) * 100:.2f}%',
+            f'{_safe(m["sharpe_ratio"]):.2f}',
+            f'{_safe(m["max_drawdown"]) * 100:.2f}%',
+            f'{_safe(m["win_rate"]) * 100:.1f}%',
+            f'{_safe(m["profit_factor"]):.2f}',
+            str(_safe(m["trade_count"], 0)),
+            f'{_safe(m["avg_trade_return"]) * 100:.2f}%',
+            str(_safe(m["long_count"], 0)),
+            str(_safe(m["short_count"], 0)),
         )
 
 
