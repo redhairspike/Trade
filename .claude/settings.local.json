@@ -1,0 +1,42 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip install:*)",
+      "Bash(python -c ':*)",
+      "Bash(pkill -f \"python app.py\")",
+      "Read(//c/Program Files/**)",
+      "Read(//c/Program Files \\(x86\\)/**)",
+      "Bash(\"/d/Program Files/PyCharm 2025.2.4/bin/pycharm64.exe\" \"E:/ClaudeCode/Trade\")",
+      "Bash(python -c \"from app import app; print\\('OK'\\)\")",
+      "Bash(python -c \"import dash; print\\(dash.__version__\\)\")",
+      "Bash(python -c \"from ui.callbacks import register_callbacks; print\\('callbacks.py OK'\\)\")",
+      "WebSearch",
+      "Bash(where gh:*)",
+      "Bash(winget install:*)",
+      "Bash(export PATH=\"$PATH:/c/Program Files/GitHub CLI\")",
+      "Bash(gh --version)",
+      "Bash(\"/c/Program Files/GitHub CLI/gh.exe\" --version)",
+      "Bash(gh auth:*)",
+      "Bash(gh repo:*)",
+      "WebFetch(domain:tcoil.info)",
+      "WebFetch(domain:www.prorealcode.com)",
+      "WebFetch(domain:analyzingalpha.com)",
+      "Bash(python -c \"from ui.callbacks import register_callbacks; print\\('OK'\\)\")",
+      "Bash(npm install:*)",
+      "Bash(claude mcp:*)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"C:/Program Files/Git/bin/bash.exe\" claude mcp add --transport sse superpowers https://mcp.superpowers.dev/sse)",
+      "Bash(where git:*)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude mcp add --transport sse superpowers https://mcp.superpowers.dev/sse)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude install-skill https://github.com/aashari/claude-code-skill-hud)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude skill install https://github.com/aashari/claude-code-skill-hud)",
+      "WebFetch(domain:github.com)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude install-skill https://github.com/jarrodwatts/claude-hud)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude -p \"run /install-skill https://github.com/jarrodwatts/claude-hud\" --no-input)",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude -p \"/install-skill https://github.com/jarrodwatts/claude-hud\")",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude -p \"/install-skill https://github.com/anthropics/claude-code-skill-creator\")",
+      "Bash(claude --version)",
+      "Bash(setx CLAUDE_CODE_GIT_BASH_PATH \"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\")",
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude --help)"
+    ]
+  }
+}

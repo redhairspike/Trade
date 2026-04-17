@@ -1,8 +1,11 @@
 import base64
-from dash import Input, Output, State, callback, no_update, ALL
+from dash import Input, Output, State, callback, no_update, ALL, dcc
 import pandas as pd
 
-from screener.fundamental import get_fundamentals_batch, load_fundamentals_csv
+from screener.fundamental import (
+    get_fundamentals_batch, load_fundamentals_csv,
+    get_twse_stock_list, get_tpex_stock_list, format_tw_symbol,
+)
 from screener.filter import FilterRule, screen
 from config import SP500_SAMPLE, FUNDAMENTAL_FIELDS
 
@@ -20,6 +23,8 @@ def register_screener_callbacks(app):
         custom_style = {"display": "block"} if pool == "custom" else {"display": "none"}
         csv_style = {"display": "block"} if pool == "csv" else {"display": "none"}
         return custom_style, csv_style
+
+
 
     # Run screener
     @app.callback(
@@ -51,10 +56,31 @@ def register_screener_callbacks(app):
                 decoded = base64.b64decode(content_string).decode("utf-8")
                 df = load_fundamentals_csv(content=decoded)
             elif pool == "custom" and custom_symbols:
-                symbols = [s.strip() for s in custom_symbols.split(",") if s.strip()]
-                if not symbols:
+                raw = [s.strip() for s in custom_symbols.replace("，", ",").split(",") if s.strip()]
+                if not raw:
                     return no_update, no_update, no_update, "請輸入股票代碼"
+                # Auto-append .TW for purely numeric codes
+                symbols = [format_tw_symbol(s) if s.isdigit() else s for s in raw]
                 df = get_fundamentals_batch(symbols)
+            elif pool in ("tw_twse", "tw_tpex", "tw_all"):
+                if pool == "tw_twse":
+                    listing = get_twse_stock_list()
+                    label = "上市"
+                elif pool == "tw_tpex":
+                    listing = get_tpex_stock_list()
+                    label = "上櫃"
+                else:
+                    twse = get_twse_stock_list()
+                    tpex = get_tpex_stock_list()
+                    listing = pd.concat([twse, tpex], ignore_index=True)
+                    label = "上市+上櫃"
+                if listing.empty:
+                    return no_update, no_update, no_update, f"無法取得台股{label}清單，請檢查網路"
+                symbols = listing["Symbol"].tolist()
+                df = get_fundamentals_batch(symbols)
+                if not df.empty:
+                    name_map = listing.set_index("Symbol")["Name"].to_dict()
+                    df["Name"] = df["Symbol"].map(name_map).fillna(df["Name"])
             else:  # sp500_sample
                 df = get_fundamentals_batch(SP500_SAMPLE)
 
@@ -115,6 +141,20 @@ def register_screener_callbacks(app):
             # Send first selected symbol to backtest (single-symbol backtest)
             return symbols[0], "backtest"
         return no_update, no_update
+
+
+    # Download screener results as CSV
+    @app.callback(
+        Output("screener-download", "data"),
+        Input("download-screener-btn", "n_clicks"),
+        State("screener-data-store", "data"),
+        prevent_initial_call=True,
+    )
+    def download_screener_csv(n_clicks, store_json):
+        if not n_clicks or not store_json:
+            return no_update
+        df = pd.read_json(store_json)
+        return dcc.send_data_frame(df.to_csv, "screener_results.csv", index=False)
 
 
 def _get_col_label(col: str) -> str:

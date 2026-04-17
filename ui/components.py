@@ -57,42 +57,52 @@ def build_rule_row(prefix: str, index: int) -> html.Div:
 
     return html.Div(
         [
-            # Row 1: indicator, field, operator, value
+            # Row 1: indicator + field (full width, each flex:1)
             html.Div(
                 [
                     dcc.Dropdown(
                         id={"type": f"{prefix}-indicator", "index": index},
                         options=indicator_options,
                         placeholder="指標",
-                        style={"width": "105px", "minWidth": "105px"},
+                        style={"flex": "1", "minWidth": "0"},
                     ),
                     dcc.Dropdown(
                         id={"type": f"{prefix}-field", "index": index},
                         options=[],
                         placeholder="欄位",
-                        style={"width": "110px", "minWidth": "110px"},
-                    ),
-                    dcc.Dropdown(
-                        id={"type": f"{prefix}-operator", "index": index},
-                        options=operator_options,
-                        placeholder="條件",
-                        style={"width": "120px", "minWidth": "120px"},
-                    ),
-                    dcc.Input(
-                        id={"type": f"{prefix}-value", "index": index},
-                        type="text",
-                        placeholder="值",
-                        style={"width": "70px"},
+                        style={"flex": "1", "minWidth": "0"},
                     ),
                 ],
                 style={
                     "display": "flex",
                     "gap": "6px",
                     "alignItems": "center",
-                    "flexWrap": "wrap",
                 },
             ),
-            # Row 2: param detail slots (up to 3, shown/hidden by callback)
+            # Row 2: operator + value
+            html.Div(
+                [
+                    dcc.Dropdown(
+                        id={"type": f"{prefix}-operator", "index": index},
+                        options=operator_options,
+                        placeholder="條件",
+                        style={"flex": "1", "minWidth": "0"},
+                    ),
+                    dcc.Input(
+                        id={"type": f"{prefix}-value", "index": index},
+                        type="text",
+                        placeholder="值",
+                        style={"width": "80px", "flexShrink": "0"},
+                    ),
+                ],
+                style={
+                    "display": "flex",
+                    "gap": "6px",
+                    "alignItems": "center",
+                    "marginTop": "4px",
+                },
+            ),
+            # Row 3: param detail slots (up to 3, shown/hidden by callback)
             html.Div(
                 [
                     _param_slot(prefix, index, 0),
@@ -108,7 +118,7 @@ def build_rule_row(prefix: str, index: int) -> html.Div:
                 },
             ),
         ],
-        style={"marginBottom": "8px"},
+        style={"marginBottom": "10px"},
     )
 
 
@@ -398,10 +408,16 @@ def build_sidebar() -> html.Div:
 
 def build_screener_panel() -> html.Div:
     """Build the stock screener panel."""
-    field_options = [
-        {"label": f'{v["label"]} ({k})', "value": k}
-        for k, v in FUNDAMENTAL_FIELDS.items()
-    ]
+    # Group fields by 'group' key, with disabled separator headers
+    field_options = []
+    current_group = None
+    for k, v in FUNDAMENTAL_FIELDS.items():
+        grp = v.get("group", "")
+        if grp != current_group:
+            current_group = grp
+            field_options.append({"label": f"── {grp} ──", "value": f"__sep_{grp}", "disabled": True})
+        field_options.append({"label": v["label"], "value": k})
+
     operator_options = [
         {"label": op, "value": op}
         for op in [">", "<", ">=", "<="]
@@ -415,7 +431,13 @@ def build_screener_panel() -> html.Div:
         dcc.Dropdown(
             id="stock-pool-select",
             options=[
+                {"label": "── 美股 ──", "value": "", "disabled": True},
                 {"label": "美股範例 (30檔)", "value": "sp500_sample"},
+                {"label": "── 台股 ──", "value": "", "disabled": True},
+                {"label": "台股上市 (TWSE)", "value": "tw_twse"},
+                {"label": "台股上櫃 (TPEx)", "value": "tw_tpex"},
+                {"label": "台股全部 (上市+上櫃)", "value": "tw_all"},
+                {"label": "── 自訂 ──", "value": "", "disabled": True},
                 {"label": "自訂清單", "value": "custom"},
                 {"label": "CSV 匯入", "value": "csv"},
             ],
@@ -429,8 +451,8 @@ def build_screener_panel() -> html.Div:
             children=[
                 dcc.Textarea(
                     id="custom-symbols-input",
-                    placeholder="輸入股票代碼，以逗號分隔\n例: AAPL, MSFT, GOOGL",
-                    style={"width": "100%", "height": "60px", "marginBottom": "10px"},
+                    placeholder="輸入股票代碼，以逗號分隔\n美股: AAPL, MSFT\n台股: 2330, 2317 (自動補 .TW)",
+                    style={"width": "100%", "height": "70px", "marginBottom": "10px"},
                 ),
             ],
             style={"display": "none"},
@@ -489,15 +511,21 @@ def build_screener_panel() -> html.Div:
 
         html.Div([
             html.Button("篩選", id="run-screener-btn", n_clicks=0, style={
-                "padding": "8px 24px", "backgroundColor": "#2196F3", "color": "white",
+                "padding": "8px 20px", "backgroundColor": "#2196F3", "color": "white",
                 "border": "none", "borderRadius": "4px", "cursor": "pointer",
-                "fontWeight": "bold", "marginRight": "10px",
+                "fontWeight": "bold", "marginRight": "8px",
+            }),
+            html.Button("⬇ 下載 CSV", id="download-screener-btn", n_clicks=0, style={
+                "padding": "8px 20px", "backgroundColor": "#4CAF50", "color": "white",
+                "border": "none", "borderRadius": "4px", "cursor": "pointer",
+                "fontWeight": "bold", "marginRight": "8px",
             }),
             html.Button("送入回測 →", id="send-to-backtest-btn", n_clicks=0, style={
-                "padding": "8px 24px", "backgroundColor": "#FF9800", "color": "white",
+                "padding": "8px 20px", "backgroundColor": "#FF9800", "color": "white",
                 "border": "none", "borderRadius": "4px", "cursor": "pointer",
                 "fontWeight": "bold",
             }),
+            dcc.Download(id="screener-download"),
         ], style={"marginTop": "10px", "marginBottom": "10px"}),
 
         html.Div(id="screener-status", style={"color": "#aaa", "fontSize": "13px", "marginBottom": "10px"}),
