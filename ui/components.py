@@ -528,10 +528,13 @@ def build_screener_panel() -> html.Div:
             dcc.Download(id="screener-download"),
         ], style={"marginTop": "10px", "marginBottom": "10px"}),
 
-        html.Div(id="screener-status", style={"color": "#aaa", "fontSize": "13px", "marginBottom": "10px"}),
-
-        # Results table
-        dash_table.DataTable(
+        # Loading wrapper — shows spinner while screener is running
+        dcc.Loading(
+            type="circle",
+            color="#2196F3",
+            children=[
+                html.Div(id="screener-status", style={"color": "#aaa", "fontSize": "13px", "marginBottom": "10px"}),
+                dash_table.DataTable(
             id="screener-results-table",
             columns=[],
             data=[],
@@ -558,6 +561,8 @@ def build_screener_panel() -> html.Div:
             sort_action="native",
             page_size=20,
         ),
+            ],  # end dcc.Loading children
+        ),      # end dcc.Loading
     ], style={"padding": "20px"})
 
 

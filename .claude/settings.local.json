@@ -36,7 +36,12 @@
       "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude -p \"/install-skill https://github.com/anthropics/claude-code-skill-creator\")",
       "Bash(claude --version)",
       "Bash(setx CLAUDE_CODE_GIT_BASH_PATH \"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\")",
-      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude --help)"
+      "Bash(CLAUDE_CODE_GIT_BASH_PATH=\"D:\\\\\\\\Program Files\\\\\\\\Git\\\\\\\\bin\\\\\\\\bash.exe\" claude --help)",
+      "WebFetch(domain:chengwaye.com)",
+      "WebFetch(domain:openapi.twse.com.tw)",
+      "WebFetch(domain:www.tpex.org.tw)",
+      "WebFetch(domain:mops.twse.com.tw)",
+      "WebFetch(domain:mopsov.twse.com.tw)"
     ]
   }
 }

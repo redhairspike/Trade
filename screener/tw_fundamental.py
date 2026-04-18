@@ -299,7 +299,7 @@ def enrich_with_gross_margin(df: pd.DataFrame, max_workers: int = 8) -> pd.DataF
                     f"step=1&firstin=1&off=1&queryName=co_id"
                     f"&inpuType=co_id&TYPEK=all&co_id={code}&year={minguo}"
                 ),
-                timeout=10,
+                timeout=6,
             )
             text = resp.content.decode("utf-8", errors="replace")
             soup = BeautifulSoup(text, "html.parser")

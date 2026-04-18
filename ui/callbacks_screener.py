@@ -50,6 +50,7 @@ def register_screener_callbacks(app):
             return no_update, no_update, no_update, no_update
 
         try:
+            mops_note = ""
             # Get fundamentals data
             if pool == "csv" and csv_contents:
                 content_type, content_string = csv_contents.split(",")
@@ -88,9 +89,14 @@ def register_screener_callbacks(app):
                 filtered = df
 
             # For Taiwan stocks: enrich filtered result with MOPS gross margin
-            # (only for filtered subset to keep requests manageable)
+            # Only when result count is small enough to be practical
+            MOPS_LIMIT = 80
+            mops_note = ""
             if pool in ("tw_twse", "tw_tpex", "tw_all") and not filtered.empty:
-                filtered = enrich_with_gross_margin(filtered)
+                if len(filtered) <= MOPS_LIMIT:
+                    filtered = enrich_with_gross_margin(filtered)
+                else:
+                    mops_note = f"（結果超過 {MOPS_LIMIT} 檔，毛利率略過；請縮小篩選條件後再查）"
 
             # Format for display
             display_cols = ["Symbol", "Name"] + [
@@ -106,7 +112,7 @@ def register_screener_callbacks(app):
             columns = [{"name": _get_col_label(c), "id": c} for c in display_df.columns]
             data = display_df.to_dict("records")
 
-            status = f"找到 {len(filtered)} 檔符合條件的股票 (共 {len(df)} 檔)"
+            status = f"找到 {len(filtered)} 檔符合條件的股票 (共 {len(df)} 檔){mops_note}"
             store = display_df.to_json(date_format="iso")
 
             return columns, data, store, status
