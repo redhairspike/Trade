@@ -3,13 +3,17 @@ Taiwan stock fundamental data from official open APIs.
 Sources:
   - TWSE (上市): openapi.twse.com.tw
   - TPEx (上櫃): www.tpex.org.tw/openapi
-  - MOPS (公開資訊觀測站): embedded in above APIs
+  - MOPS 毛利率: mopsov.twse.com.tw/mops/web/ajax_t163sb09 (per-stock POST)
 
-All endpoints return JSON and cover all listed/OTC companies at once,
-so we fetch in bulk (no per-stock API calls needed).
+Bulk endpoints (PE/PB/Yield, quarterly fin, monthly revenue) fetch all
+companies in one request.  MOPS gross margin is fetched per-stock and
+called only for the filtered result set to keep latency acceptable.
 """
+import datetime
 import requests
 import pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from bs4 import BeautifulSoup
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
 _TWSE_PE   = "https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_d"
@@ -255,17 +259,102 @@ def get_tw_fundamentals(market: str = "twse") -> pd.DataFrame:
         )
 
     # 三率三升: 月營收年增率 > 0 AND 營業利益率年增 > 0 AND 淨利率年增 > 0
-    def _three_rates(row):
-        rg  = row.get("RevenueGrowth")
-        omy = row.get("OperatingMarginYOY")
-        nmy = row.get("NetMarginYOY")
-        if rg is None or omy is None or nmy is None:
-            return 0
-        return 1 if (rg > 0 and omy > 0 and nmy > 0) else 0
-
-    df["ThreeRatesUp"] = df.apply(_three_rates, axis=1)
+    # (GrossMarginYOY filled in later via enrich_with_gross_margin if requested)
+    df["GrossMargin"]    = None
+    df["GrossMarginYOY"] = None
+    df["ThreeRatesUp"]   = df.apply(_calc_three_rates, axis=1)
 
     return df
+
+
+def enrich_with_gross_margin(df: pd.DataFrame, max_workers: int = 8) -> pd.DataFrame:
+    """
+    Fetch gross margin from MOPS (ajax_t163sb09) for each stock in df.
+    Called AFTER filtering to limit the number of per-stock requests.
+
+    Adds / fills columns: GrossMargin (%), GrossMarginYOY (pp), ThreeRatesUp.
+    Returns the enriched DataFrame (copy).
+    """
+    if df.empty:
+        return df
+
+    cur_year = datetime.date.today().year
+    # MOPS uses 民國 year (西元 - 1911)
+    minguo = cur_year - 1911
+
+    symbols = df["Symbol"].tolist()
+
+    def _fetch_one(sym: str) -> tuple:
+        code = sym.replace(".TW", "").replace(".TWO", "")
+        gm, gm_yoy = None, None
+        try:
+            resp = requests.post(
+                "https://mopsov.twse.com.tw/mops/web/ajax_t163sb09",
+                headers={
+                    "Content-Type": "application/x-www-form-urlencoded",
+                    "Referer": "https://mopsov.twse.com.tw/mops/web/t163sb09",
+                    "User-Agent": "Mozilla/5.0",
+                },
+                data=(
+                    f"step=1&firstin=1&off=1&queryName=co_id"
+                    f"&inpuType=co_id&TYPEK=all&co_id={code}&year={minguo}"
+                ),
+                timeout=10,
+            )
+            text = resp.content.decode("utf-8", errors="replace")
+            soup = BeautifulSoup(text, "html.parser")
+            table = soup.find("table", class_="hasBorder")
+            if not table:
+                return sym, None, None
+            yearly = {}
+            for row in table.find_all("tr"):
+                cells = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
+                if len(cells) >= 6 and cells[0].isdigit():
+                    yr_ad = int(cells[0]) + 1911
+                    val   = _to_float(cells[5])
+                    if val is not None:
+                        yearly[yr_ad] = val
+            if yearly:
+                years = sorted(yearly.keys(), reverse=True)
+                gm = yearly[years[0]]
+                if len(years) >= 2:
+                    gm_yoy = round(gm - yearly[years[1]], 2)
+        except Exception:
+            pass
+        return sym, gm, gm_yoy
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_fetch_one, sym): sym for sym in symbols}
+        for fut in as_completed(futures):
+            sym, gm, gm_yoy = fut.result()
+            results[sym] = (gm, gm_yoy)
+
+    df = df.copy()
+    df["GrossMargin"]    = df["Symbol"].map(lambda s: results.get(s, (None, None))[0])
+    df["GrossMarginYOY"] = df["Symbol"].map(lambda s: results.get(s, (None, None))[1])
+    df["ThreeRatesUp"]   = df.apply(_calc_three_rates_full, axis=1)
+    return df
+
+
+def _calc_three_rates(row) -> int:
+    """三率三升（無毛利率版）: 月營收 + 營益率 + 淨利率 YOY 全升."""
+    rg  = row.get("RevenueGrowth")
+    omy = row.get("OperatingMarginYOY")
+    nmy = row.get("NetMarginYOY")
+    if any(v is None for v in (rg, omy, nmy)):
+        return 0
+    return 1 if (rg > 0 and omy > 0 and nmy > 0) else 0
+
+
+def _calc_three_rates_full(row) -> int:
+    """三率三升（含毛利率版）: 毛利率 + 營益率 + 淨利率 YOY 全升."""
+    gmy = row.get("GrossMarginYOY")
+    omy = row.get("OperatingMarginYOY")
+    nmy = row.get("NetMarginYOY")
+    if any(v is None for v in (gmy, omy, nmy)):
+        return 0
+    return 1 if (gmy > 0 and omy > 0 and nmy > 0) else 0
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ import pandas as pd
 from screener.fundamental import (
     get_fundamentals_batch, load_fundamentals_csv, format_tw_symbol,
 )
-from screener.tw_fundamental import get_tw_fundamentals
+from screener.tw_fundamental import get_tw_fundamentals, enrich_with_gross_margin
 from screener.filter import FilterRule, screen
 from config import SP500_SAMPLE, FUNDAMENTAL_FIELDS
 
@@ -86,6 +86,11 @@ def register_screener_callbacks(app):
                 filtered = screen(df, rules)
             else:
                 filtered = df
+
+            # For Taiwan stocks: enrich filtered result with MOPS gross margin
+            # (only for filtered subset to keep requests manageable)
+            if pool in ("tw_twse", "tw_tpex", "tw_all") and not filtered.empty:
+                filtered = enrich_with_gross_margin(filtered)
 
             # Format for display
             display_cols = ["Symbol", "Name"] + [
