@@ -3,9 +3,9 @@ from dash import Input, Output, State, callback, no_update, ALL, dcc
 import pandas as pd
 
 from screener.fundamental import (
-    get_fundamentals_batch, load_fundamentals_csv,
-    get_twse_stock_list, get_tpex_stock_list, format_tw_symbol,
+    get_fundamentals_batch, load_fundamentals_csv, format_tw_symbol,
 )
+from screener.tw_fundamental import get_tw_fundamentals
 from screener.filter import FilterRule, screen
 from config import SP500_SAMPLE, FUNDAMENTAL_FIELDS
 
@@ -63,24 +63,10 @@ def register_screener_callbacks(app):
                 symbols = [format_tw_symbol(s) if s.isdigit() else s for s in raw]
                 df = get_fundamentals_batch(symbols)
             elif pool in ("tw_twse", "tw_tpex", "tw_all"):
-                if pool == "tw_twse":
-                    listing = get_twse_stock_list()
-                    label = "上市"
-                elif pool == "tw_tpex":
-                    listing = get_tpex_stock_list()
-                    label = "上櫃"
-                else:
-                    twse = get_twse_stock_list()
-                    tpex = get_tpex_stock_list()
-                    listing = pd.concat([twse, tpex], ignore_index=True)
-                    label = "上市+上櫃"
-                if listing.empty:
-                    return no_update, no_update, no_update, f"無法取得台股{label}清單，請檢查網路"
-                symbols = listing["Symbol"].tolist()
-                df = get_fundamentals_batch(symbols)
-                if not df.empty:
-                    name_map = listing.set_index("Symbol")["Name"].to_dict()
-                    df["Name"] = df["Symbol"].map(name_map).fillna(df["Name"])
+                market_map = {"tw_twse": "twse", "tw_tpex": "tpex", "tw_all": "all"}
+                df = get_tw_fundamentals(market=market_map[pool])
+                if df.empty:
+                    return no_update, no_update, no_update, "無法取得台股資料，請檢查網路"
             else:  # sp500_sample
                 df = get_fundamentals_batch(SP500_SAMPLE)
 
