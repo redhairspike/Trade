@@ -88,15 +88,7 @@ def register_screener_callbacks(app):
             else:
                 filtered = df
 
-            # For Taiwan stocks: enrich filtered result with MOPS gross margin
-            # Only when result count is small enough to be practical
-            MOPS_LIMIT = 80
             mops_note = ""
-            if pool in ("tw_twse", "tw_tpex", "tw_all") and not filtered.empty:
-                if len(filtered) <= MOPS_LIMIT:
-                    filtered = enrich_with_gross_margin(filtered)
-                else:
-                    mops_note = f"（結果超過 {MOPS_LIMIT} 檔，毛利率略過；請縮小篩選條件後再查）"
 
             # Format for display
             display_cols = ["Symbol", "Name"] + [
@@ -119,6 +111,43 @@ def register_screener_callbacks(app):
 
         except Exception as e:
             return no_update, no_update, no_update, f"錯誤: {str(e)}"
+
+    # Enrich filtered results with MOPS gross margin
+    @app.callback(
+        Output("screener-results-table", "columns", allow_duplicate=True),
+        Output("screener-results-table", "data", allow_duplicate=True),
+        Output("screener-data-store", "data", allow_duplicate=True),
+        Output("screener-status", "children", allow_duplicate=True),
+        Input("enrich-grossmargin-btn", "n_clicks"),
+        State("screener-data-store", "data"),
+        prevent_initial_call=True,
+    )
+    def enrich_grossmargin(n_clicks, store_json):
+        if not n_clicks or not store_json:
+            return no_update, no_update, no_update, no_update
+        try:
+            df = pd.read_json(store_json)
+            if df.empty:
+                return no_update, no_update, no_update, "尚無篩選結果，請先執行篩選"
+
+            status_msg = f"正在從 MOPS 抓取 {len(df)} 支股票毛利率（約需 {max(5, len(df)//8)} 秒）..."
+            df = enrich_with_gross_margin(df, max_workers=20)
+
+            display_cols = ["Symbol", "Name"] + [
+                k for k in FUNDAMENTAL_FIELDS.keys() if k in df.columns
+            ]
+            display_df = df[[c for c in display_cols if c in df.columns]]
+            for col in display_df.columns:
+                if col not in ["Symbol", "Name"] and display_df[col].dtype in ["float64", "float32"]:
+                    display_df[col] = display_df[col].round(4)
+
+            columns = [{"name": _get_col_label(c), "id": c} for c in display_df.columns]
+            data = display_df.to_dict("records")
+            n_gm = display_df["GrossMargin"].notna().sum() if "GrossMargin" in display_df else 0
+            status = f"毛利率補充完成：{n_gm}/{len(df)} 支有資料（三率三升已重新計算）"
+            return columns, data, display_df.to_json(date_format="iso"), status
+        except Exception as e:
+            return no_update, no_update, no_update, f"補毛利率錯誤: {str(e)}"
 
     # Send selected symbols to backtest
     @app.callback(

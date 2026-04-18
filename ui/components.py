@@ -515,6 +515,11 @@ def build_screener_panel() -> html.Div:
                 "border": "none", "borderRadius": "4px", "cursor": "pointer",
                 "fontWeight": "bold", "marginRight": "8px",
             }),
+            html.Button("補毛利率", id="enrich-grossmargin-btn", n_clicks=0, style={
+                "padding": "8px 20px", "backgroundColor": "#9C27B0", "color": "white",
+                "border": "none", "borderRadius": "4px", "cursor": "pointer",
+                "fontWeight": "bold", "marginRight": "8px",
+            }),
             html.Button("⬇ 下載 CSV", id="download-screener-btn", n_clicks=0, style={
                 "padding": "8px 20px", "backgroundColor": "#4CAF50", "color": "white",
                 "border": "none", "borderRadius": "4px", "cursor": "pointer",
