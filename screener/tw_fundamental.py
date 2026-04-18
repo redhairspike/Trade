@@ -269,32 +269,125 @@ def get_tw_fundamentals(market: str = "twse") -> pd.DataFrame:
 
 def enrich_with_gross_margin(df: pd.DataFrame, max_workers: int = 10) -> pd.DataFrame:
     """
-    Fetch gross margin via yfinance for each stock in df.
-    Called AFTER filtering so the number of stocks is manageable.
+    Enrich filtered results with gross margin and YOY margin data.
 
-    Adds / fills columns: GrossMargin (%), GrossMarginYOY (pp),
-    OperatingMarginYOY (pp), NetMarginYOY (pp), ThreeRatesUp.
-    Returns the enriched DataFrame (copy).
+    For .TW / .TWO symbols: uses FinMind TaiwanStockFinancialStatements
+    (quarterly data, latest quarter vs same quarter last year).
+    For other symbols: falls back to yfinance annual financials.
+
+    Adds / updates columns:
+      GrossMargin (%), GrossMarginYOY (pp), OperatingMarginYOY (pp),
+      NetMarginYOY (pp), GrossMarginYOY_Q (pp), OperatingMarginYOY_Q (pp),
+      NetMarginYOY_Q (pp), ThreeRatesUp, ThreeRatesUp_Q
     """
+    import datetime
     import yfinance as yf
+    from config import FINMIND_TOKEN
 
     if df.empty:
         return df
 
-    symbols = df["Symbol"].tolist()
+    _ENRICH_COLS = (
+        "GrossMargin", "GrossMarginYOY", "OperatingMarginYOY", "NetMarginYOY",
+        "GrossMarginYOY_Q", "OperatingMarginYOY_Q", "NetMarginYOY_Q",
+    )
+    start_date = (datetime.date.today() - datetime.timedelta(days=760)).strftime("%Y-%m-%d")
 
-    def _fetch_one(sym: str) -> dict:
-        out = {"Symbol": sym, "GrossMargin": None, "GrossMarginYOY": None,
-               "OperatingMarginYOY": None, "NetMarginYOY": None}
+    # ── FinMind (Taiwan stocks) ──────────────────────────────────────────────
+
+    def _fetch_finmind(sym: str) -> dict:
+        out = {"Symbol": sym, **{c: None for c in _ENRICH_COLS}}
+        stock_id = sym.split(".")[0]
+        try:
+            resp = requests.get(
+                "https://api.finmindtrade.com/api/v4/data",
+                params={
+                    "dataset": "TaiwanStockFinancialStatements",
+                    "data_id": stock_id,
+                    "start_date": start_date,
+                    "token": FINMIND_TOKEN,
+                },
+                timeout=20,
+            )
+            payload = resp.json()
+            if payload.get("status") != 200 or not payload.get("data"):
+                return out
+
+            key_types = {
+                "Revenue", "GrossProfit", "OperatingIncome",
+                "TotalConsolidatedProfitForThePeriod",
+            }
+            rows = [r for r in payload["data"] if r["type"] in key_types]
+            if not rows:
+                return out
+
+            fin = (
+                pd.DataFrame(rows)
+                .pivot_table(index="date", columns="type", values="value", aggfunc="last")
+            )
+            fin.index = pd.to_datetime(fin.index)
+            fin = fin.sort_index()
+
+            if len(fin) < 2:
+                return out
+
+            # Most recent quarter
+            latest = fin.iloc[-1]
+            latest_date = fin.index[-1]
+
+            # Find same quarter last year (within 46 days)
+            target = latest_date - pd.DateOffset(years=1)
+            diffs  = (fin.index - target).map(abs)
+            prior_iloc = diffs.argmin()
+            if diffs[prior_iloc].days > 46:
+                return out
+            prior = fin.iloc[prior_iloc]
+
+            def _margin(profit_col, rev_col, row):
+                try:
+                    r = float(row.get(rev_col, 0) or 0)
+                    if r == 0:
+                        return None
+                    return float(row.get(profit_col, 0) or 0) / r * 100
+                except Exception:
+                    return None
+
+            gm_cur  = _margin("GrossProfit",  "Revenue", latest)
+            gm_prev = _margin("GrossProfit",  "Revenue", prior)
+            om_cur  = _margin("OperatingIncome", "Revenue", latest)
+            om_prev = _margin("OperatingIncome", "Revenue", prior)
+            nm_cur  = _margin("TotalConsolidatedProfitForThePeriod", "Revenue", latest)
+            nm_prev = _margin("TotalConsolidatedProfitForThePeriod", "Revenue", prior)
+
+            if gm_cur is not None:
+                out["GrossMargin"] = round(gm_cur, 2)
+            if gm_cur is not None and gm_prev is not None:
+                yoy = round(gm_cur - gm_prev, 2)
+                out["GrossMarginYOY"] = yoy
+                out["GrossMarginYOY_Q"] = yoy
+            if om_cur is not None and om_prev is not None:
+                yoy = round(om_cur - om_prev, 2)
+                out["OperatingMarginYOY"] = yoy
+                out["OperatingMarginYOY_Q"] = yoy
+            if nm_cur is not None and nm_prev is not None:
+                yoy = round(nm_cur - nm_prev, 2)
+                out["NetMarginYOY"] = yoy
+                out["NetMarginYOY_Q"] = yoy
+        except Exception:
+            pass
+        return out
+
+    # ── yfinance (non-Taiwan stocks) ─────────────────────────────────────────
+
+    def _fetch_yfinance(sym: str) -> dict:
+        out = {"Symbol": sym, **{c: None for c in _ENRICH_COLS}}
         try:
             ticker = yf.Ticker(sym)
             info = ticker.info
-            # Current gross margin from info (ratio → %)
             gm_cur = info.get("grossMargins")
             if gm_cur is not None:
                 out["GrossMargin"] = round(gm_cur * 100, 2)
 
-            # YOY from annual financials (2 most recent years)
             fin = ticker.financials
             if fin is not None and not fin.empty and fin.shape[1] >= 2:
                 rev_row = _find_row(fin, ["Total Revenue", "Revenue"])
@@ -323,18 +416,30 @@ def enrich_with_gross_margin(df: pd.DataFrame, max_workers: int = 10) -> pd.Data
             pass
         return out
 
-    results = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_fetch_one, sym): sym for sym in symbols}
-        for fut in as_completed(futures):
-            r = fut.result()
-            results[r["Symbol"]] = r
+    # ── Dispatch ─────────────────────────────────────────────────────────────
+
+    symbols = df["Symbol"].tolist()
+    tw_syms    = [s for s in symbols if s.endswith(".TW") or s.endswith(".TWO")]
+    other_syms = [s for s in symbols if s not in tw_syms]
+
+    results: dict = {}
+
+    def _run(fn, syms):
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {pool.submit(fn, sym): sym for sym in syms}
+            for fut in as_completed(futures):
+                r = fut.result()
+                results[r["Symbol"]] = r
+
+    _run(_fetch_finmind, tw_syms)
+    _run(_fetch_yfinance, other_syms)
 
     df = df.copy()
-    for col in ("GrossMargin", "GrossMarginYOY", "OperatingMarginYOY", "NetMarginYOY"):
+    for col in _ENRICH_COLS:
         df[col] = df["Symbol"].map(lambda s, c=col: results.get(s, {}).get(c))
 
-    df["ThreeRatesUp"] = df.apply(_calc_three_rates_full, axis=1)
+    df["ThreeRatesUp"]   = df.apply(_calc_three_rates_full, axis=1)
+    df["ThreeRatesUp_Q"] = df.apply(_calc_three_rates_full_q, axis=1)
     return df
 
 
@@ -349,10 +454,20 @@ def _calc_three_rates(row) -> int:
 
 
 def _calc_three_rates_full(row) -> int:
-    """三率三升（含毛利率版）: 毛利率 + 營益率 + 淨利率 YOY 全升."""
+    """三率三升（含毛利率，年度版）: 毛利率 + 營益率 + 淨利率 YOY 全升."""
     gmy = row.get("GrossMarginYOY")
     omy = row.get("OperatingMarginYOY")
     nmy = row.get("NetMarginYOY")
+    if any(v is None for v in (gmy, omy, nmy)):
+        return 0
+    return 1 if (gmy > 0 and omy > 0 and nmy > 0) else 0
+
+
+def _calc_three_rates_full_q(row) -> int:
+    """三率三升（含毛利率，單季版）: 毛利率 + 營益率 + 淨利率 單季 YOY 全升."""
+    gmy = row.get("GrossMarginYOY_Q")
+    omy = row.get("OperatingMarginYOY_Q")
+    nmy = row.get("NetMarginYOY_Q")
     if any(v is None for v in (gmy, omy, nmy)):
         return 0
     return 1 if (gmy > 0 and omy > 0 and nmy > 0) else 0

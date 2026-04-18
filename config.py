@@ -1,3 +1,16 @@
+import os
+
+# FinMind API token (loaded from .env or environment variable)
+FINMIND_TOKEN = os.environ.get("FINMIND_TOKEN", "")
+if not FINMIND_TOKEN:
+    _env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(_env_path):
+        with open(_env_path) as _f:
+            for _line in _f:
+                if _line.startswith("FINMIND_TOKEN="):
+                    FINMIND_TOKEN = _line.strip().split("=", 1)[1]
+                    break
+
 DEFAULT_INITIAL_CAPITAL = 1_000_000
 DEFAULT_COMMISSION_RATE = 0.001      # 0.1%
 DEFAULT_SLIPPAGE_RATE = 0.0005       # 0.05%
