@@ -267,73 +267,74 @@ def get_tw_fundamentals(market: str = "twse") -> pd.DataFrame:
     return df
 
 
-def enrich_with_gross_margin(df: pd.DataFrame, max_workers: int = 8) -> pd.DataFrame:
+def enrich_with_gross_margin(df: pd.DataFrame, max_workers: int = 10) -> pd.DataFrame:
     """
-    Fetch gross margin from MOPS (ajax_t163sb09) for each stock in df.
-    Called AFTER filtering to limit the number of per-stock requests.
+    Fetch gross margin via yfinance for each stock in df.
+    Called AFTER filtering so the number of stocks is manageable.
 
-    Adds / fills columns: GrossMargin (%), GrossMarginYOY (pp), ThreeRatesUp.
+    Adds / fills columns: GrossMargin (%), GrossMarginYOY (pp),
+    OperatingMarginYOY (pp), NetMarginYOY (pp), ThreeRatesUp.
     Returns the enriched DataFrame (copy).
     """
+    import yfinance as yf
+
     if df.empty:
         return df
 
-    cur_year = datetime.date.today().year
-    # MOPS uses 民國 year (西元 - 1911)
-    minguo = cur_year - 1911
-
     symbols = df["Symbol"].tolist()
 
-    def _fetch_one(sym: str) -> tuple:
-        code = sym.replace(".TW", "").replace(".TWO", "")
-        gm, gm_yoy = None, None
+    def _fetch_one(sym: str) -> dict:
+        out = {"Symbol": sym, "GrossMargin": None, "GrossMarginYOY": None,
+               "OperatingMarginYOY": None, "NetMarginYOY": None}
         try:
-            resp = requests.post(
-                "https://mopsov.twse.com.tw/mops/web/ajax_t163sb09",
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Referer": "https://mopsov.twse.com.tw/mops/web/t163sb09",
-                    "User-Agent": "Mozilla/5.0",
-                },
-                data=(
-                    f"step=1&firstin=1&off=1&queryName=co_id"
-                    f"&inpuType=co_id&TYPEK=all&co_id={code}&year={minguo}"
-                ),
-                timeout=6,
-            )
-            text = resp.content.decode("utf-8", errors="replace")
-            soup = BeautifulSoup(text, "html.parser")
-            table = soup.find("table", class_="hasBorder")
-            if not table:
-                return sym, None, None
-            yearly = {}
-            for row in table.find_all("tr"):
-                cells = [td.get_text(strip=True) for td in row.find_all(["td", "th"])]
-                if len(cells) >= 6 and cells[0].isdigit():
-                    yr_ad = int(cells[0]) + 1911
-                    val   = _to_float(cells[5])
-                    if val is not None:
-                        yearly[yr_ad] = val
-            if yearly:
-                years = sorted(yearly.keys(), reverse=True)
-                gm = yearly[years[0]]
-                if len(years) >= 2:
-                    gm_yoy = round(gm - yearly[years[1]], 2)
+            ticker = yf.Ticker(sym)
+            info = ticker.info
+            # Current gross margin from info (ratio → %)
+            gm_cur = info.get("grossMargins")
+            if gm_cur is not None:
+                out["GrossMargin"] = round(gm_cur * 100, 2)
+
+            # YOY from annual financials (2 most recent years)
+            fin = ticker.financials
+            if fin is not None and not fin.empty and fin.shape[1] >= 2:
+                rev_row = _find_row(fin, ["Total Revenue", "Revenue"])
+                gp_row  = _find_row(fin, ["Gross Profit"])
+                op_row  = _find_row(fin, ["Operating Income", "Operating Profit", "EBIT"])
+                ni_row  = _find_row(fin, ["Net Income", "Net Income Common Stockholders"])
+                if rev_row and gp_row:
+                    rev, gp = fin.loc[rev_row], fin.loc[gp_row]
+                    gm0 = _safe_div(gp.iloc[0], rev.iloc[0])
+                    gm1 = _safe_div(gp.iloc[1], rev.iloc[1])
+                    if gm0 is not None and gm1 is not None:
+                        out["GrossMarginYOY"] = round((gm0 - gm1) * 100, 2)
+                if rev_row and op_row:
+                    rev, op = fin.loc[rev_row], fin.loc[op_row]
+                    om0 = _safe_div(op.iloc[0], rev.iloc[0])
+                    om1 = _safe_div(op.iloc[1], rev.iloc[1])
+                    if om0 is not None and om1 is not None:
+                        out["OperatingMarginYOY"] = round((om0 - om1) * 100, 2)
+                if rev_row and ni_row:
+                    rev, ni = fin.loc[rev_row], fin.loc[ni_row]
+                    nm0 = _safe_div(ni.iloc[0], rev.iloc[0])
+                    nm1 = _safe_div(ni.iloc[1], rev.iloc[1])
+                    if nm0 is not None and nm1 is not None:
+                        out["NetMarginYOY"] = round((nm0 - nm1) * 100, 2)
         except Exception:
             pass
-        return sym, gm, gm_yoy
+        return out
 
     results = {}
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(_fetch_one, sym): sym for sym in symbols}
         for fut in as_completed(futures):
-            sym, gm, gm_yoy = fut.result()
-            results[sym] = (gm, gm_yoy)
+            r = fut.result()
+            results[r["Symbol"]] = r
 
     df = df.copy()
-    df["GrossMargin"]    = df["Symbol"].map(lambda s: results.get(s, (None, None))[0])
-    df["GrossMarginYOY"] = df["Symbol"].map(lambda s: results.get(s, (None, None))[1])
-    df["ThreeRatesUp"]   = df.apply(_calc_three_rates_full, axis=1)
+    for col in ("GrossMargin", "GrossMarginYOY", "OperatingMarginYOY", "NetMarginYOY"):
+        df[col] = df["Symbol"].map(lambda s, c=col: results.get(s, {}).get(c))
+
+    df["ThreeRatesUp"] = df.apply(_calc_three_rates_full, axis=1)
     return df
 
 
@@ -382,5 +383,21 @@ def _safe_pct(numerator, denominator) -> float | None:
         if d == 0:
             return None
         return round(n / d * 100, 4)
+    except (TypeError, ValueError):
+        return None
+
+
+def _find_row(fin: pd.DataFrame, candidates: list) -> str | None:
+    """Return first matching index label in fin.index from candidates list."""
+    for c in candidates:
+        if c in fin.index:
+            return c
+    return None
+
+
+def _safe_div(a, b) -> float | None:
+    try:
+        fa, fb = float(a), float(b)
+        return fa / fb if fb != 0 else None
     except (TypeError, ValueError):
         return None

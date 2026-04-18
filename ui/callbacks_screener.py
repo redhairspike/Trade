@@ -1,4 +1,5 @@
 import base64
+import io
 from dash import Input, Output, State, callback, no_update, ALL, dcc
 import pandas as pd
 
@@ -126,7 +127,7 @@ def register_screener_callbacks(app):
         if not n_clicks or not store_json:
             return no_update, no_update, no_update, no_update
         try:
-            df = pd.read_json(store_json)
+            df = pd.read_json(io.StringIO(store_json))
             if df.empty:
                 return no_update, no_update, no_update, "尚無篩選結果，請先執行篩選"
 
@@ -179,7 +180,7 @@ def register_screener_callbacks(app):
     def download_screener_csv(n_clicks, store_json):
         if not n_clicks or not store_json:
             return no_update
-        df = pd.read_json(store_json)
+        df = pd.read_json(io.StringIO(store_json))
         return dcc.send_data_frame(df.to_csv, "screener_results.csv", index=False)
 
 
